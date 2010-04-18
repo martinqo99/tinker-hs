@@ -16,27 +16,30 @@
 make_data :: Int -> [Int]
 make_data len = [0|_ <- [1..len]]
 
-data BFInstr = PtrLeft | PtrRight | Incr | Decr | JumpFwd | JumpBwd deriving Show
+data BFInstr = PtrLeft | PtrRight | Incr | Decr | Input | Output | JumpFwd | JumpBwd deriving Show
+data BFState = BFState [Int] [Int] | Fail deriving Show
 
-interpret :: [BFInstr] -> [BFInstr] -> [Int] -> [Int] -> [Int]
-interpret [] _ rData lData = (reverse lData) ++ rData
-interpret (PtrLeft:ris) lil rdl (ld:lds) = interpret ris (PtrLeft:lil) (ld:rdl) lds
-interpret ril@(ri:ris) lil rdl@(rd:rds) ldl =
+interpret :: [BFInstr] -> [BFInstr] -> [Int] -> [Int] -> [Int] -> [Int] -> BFState
+interpret [] _ rData lData _ outp = BFState ((reverse lData) ++ rData) (reverse outp)
+interpret (PtrLeft:ris) lil rdl (ld:lds) inp outp = interpret ris (PtrLeft:lil) (ld:rdl) lds inp outp
+interpret (Input:ris) lil (rd:rds) ldl (inp:inps) outp = interpret ris (Input:lil) (inp:rds) ldl inps outp
+interpret ril@(ri:ris) lil rdl@(rd:rds) ldl inp outp=
     case ri of
-      Incr     -> interpret ris (ri:lil) (succ rd:rds) ldl
-      Decr     -> interpret ris (ri:lil) (pred rd:rds) ldl
-      PtrRight -> interpret ris (ri:lil) rds (rd:ldl)
+      Incr     -> interpret ris (ri:lil) (succ rd:rds) ldl inp outp
+      Decr     -> interpret ris (ri:lil) (pred rd:rds) ldl inp outp
+      PtrRight -> interpret ris (ri:lil) rds (rd:ldl) inp outp
+      Output   -> interpret ris (ri:lil) rdl ldl inp (rd:outp)
       JumpFwd  -> if rd == 0 then
-                      interpret newRil newLil rdl ldl
+                      interpret newRil newLil rdl ldl inp outp
                   else
-                      interpret ris (ri:lil) rdl ldl
+                      interpret ris (ri:lil) rdl ldl inp outp
                   where (newRil, newLil) = jump_fwd ris (ri:lil) 0
       JumpBwd  -> if rd == 0 then
-                      interpret ris (ri:lil) rdl ldl
+                      interpret ris (ri:lil) rdl ldl inp outp
                   else
-                      interpret newRil newLil rdl ldl
+                      interpret newRil newLil rdl ldl inp outp
                   where (newLil, newRil) = jump_bwd lil ril 0
-interpret _ _ _ _ = error "no"
+interpret _ _ _ _ _ _ = Fail
 
 jump_fwd :: [BFInstr] -> [BFInstr] -> Int -> ([BFInstr], [BFInstr])
 jump_fwd (JumpBwd:ri) li n
