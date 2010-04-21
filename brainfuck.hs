@@ -13,44 +13,62 @@
 -- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 -- GNU General Public License for more details.
 
-make_data :: Int -> [Int]
-make_data len = [0|_ <- [1..len]]
+import Data.List.Zipper as ListZipper
+
+make_data :: Int -> ListZipper.Zipper Int
+make_data len = ListZipper.fromList [0|_ <- [1..len]]
 
 data BFInstr = PtrLeft | PtrRight | Incr | Decr | Input | Output | JumpFwd | JumpBwd deriving Show
 data BFState = BFState [Int] [Int] | Fail deriving Show
 
-interpret :: [BFInstr] -> [BFInstr] -> [Int] -> [Int] -> [Int] -> [Int] -> BFState
-interpret [] _ rData lData _ outp = BFState ((reverse lData) ++ rData) (reverse outp)
-interpret (PtrLeft:ris) lil rdl (ld:lds) inp outp = interpret ris (PtrLeft:lil) (ld:rdl) lds inp outp
-interpret (Input:ris) lil (rd:rds) ldl (inp:inps) outp = interpret ris (Input:lil) (inp:rds) ldl inps outp
-interpret ril@(ri:ris) lil rdl@(rd:rds) ldl inp outp=
-    case ri of
-      Incr     -> interpret ris (ri:lil) (succ rd:rds) ldl inp outp
-      Decr     -> interpret ris (ri:lil) (pred rd:rds) ldl inp outp
-      PtrRight -> interpret ris (ri:lil) rds (rd:ldl) inp outp
-      Output   -> interpret ris (ri:lil) rdl ldl inp (rd:outp)
-      JumpFwd  -> if rd == 0 then
-                      interpret newRil newLil rdl ldl inp outp
-                  else
-                      interpret ris (ri:lil) rdl ldl inp outp
-                  where (newRil, newLil) = jump_fwd ris (ri:lil) 0
-      JumpBwd  -> if rd == 0 then
-                      interpret ris (ri:lil) rdl ldl inp outp
-                  else
-                      interpret newRil newLil rdl ldl inp outp
-                  where (newLil, newRil) = jump_bwd lil ril 0
-interpret _ _ _ _ _ _ = Fail
+interpret :: ListZipper.Zipper BFInstr -> ListZipper.Zipper Int -> [Int] -> [Int] -> BFState
+interpret instr dat inp outp
+    | ListZipper.endp instr = BFState (ListZipper.toList dat) (reverse outp)
+    | otherwise = case curInstr of
+                    Incr     -> interpret nextInstr (ListZipper.replace (succ curData) dat) inp outp
+                    Decr     -> interpret nextInstr (ListZipper.replace (pred curData) dat) inp outp
+                    PtrLeft  -> interpret nextInstr (ListZipper.left dat) inp outp
+                    PtrRight -> interpret nextInstr (ListZipper.right dat) inp outp
+                    Input    -> interpret nextInstr (ListZipper.replace (head inp) dat) (tail inp) outp
+                    Output   -> interpret nextInstr dat inp (curData:outp)
+                    JumpFwd  -> if curData == 0 then
+                                    interpret newInstr dat inp outp
+                                else
+                                    interpret nextInstr dat inp outp
+                                where newInstr = jump_fwd nextInstr 0
+                    JumpBwd  -> if curData == 0 then
+                                    interpret nextInstr dat inp outp
+                                else
+                                    interpret newInstr dat inp outp
+                                where newInstr = jump_bwd instr 0
+    where
+      curInstr = ListZipper.cursor instr
+      nextInstr = ListZipper.right instr
+      prevInstr = ListZipper.left instr
+      curData = ListZipper.cursor dat
 
-jump_fwd :: [BFInstr] -> [BFInstr] -> Int -> ([BFInstr], [BFInstr])
-jump_fwd (JumpBwd:ri) li n
-    | n == 0 = (ri, JumpBwd:li)
-    | otherwise = jump_fwd ri (JumpBwd:li) (pred n)
-jump_fwd (JumpFwd:ri) li n = jump_fwd ri (JumpFwd:li) (succ n)
-jump_fwd (i:ri) li n = jump_fwd ri (i:li) n
+jump_fwd :: ListZipper.Zipper BFInstr -> Int -> ListZipper.Zipper BFInstr
+jump_fwd instr n =
+    case curInstr of
+      JumpBwd -> if n == 0 then
+                     nextInstr
+                 else
+                     jump_fwd nextInstr (pred n)
+      JumpFwd -> jump_fwd nextInstr (succ n)
+      _ -> jump_fwd nextInstr n
+    where curInstr = ListZipper.cursor instr
+          nextInstr = ListZipper.right instr
 
-jump_bwd :: [BFInstr] -> [BFInstr] -> Int ->([BFInstr], [BFInstr])
-jump_bwd li@(JumpFwd:xs) ri n
-    | n == 0 = (li, ri)
-    | otherwise = jump_bwd xs (JumpFwd:ri) (pred n)
-jump_bwd (JumpBwd:li) ri n = jump_bwd li (JumpBwd:ri) (succ n)
-jump_bwd (i:li) ri n = jump_bwd li (i:ri) n
+jump_bwd :: ListZipper.Zipper BFInstr -> Int -> ListZipper.Zipper BFInstr
+jump_bwd instr n =
+    case curInstr of
+      JumpFwd -> if n == 0 then
+                     nextInstr
+                 else
+                     jump_bwd prevInstr (pred n)
+      JumpBwd -> jump_bwd prevInstr (succ n)
+      _ -> jump_bwd prevInstr n
+    where curInstr = ListZipper.cursor instr
+          nextInstr = ListZipper.right instr
+          prevInstr = ListZipper.left instr
+
