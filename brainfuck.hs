@@ -19,7 +19,21 @@ make_data :: Int -> ListZipper.Zipper Int
 make_data len = ListZipper.fromList [0|_ <- [1..len]]
 
 data BFInstr = PtrLeft | PtrRight | Incr | Decr | Input | Output | JumpFwd | JumpBwd deriving Show
+
+instance Read BFInstr where
+    readsPrec _ value = 
+        tryParse [("<", PtrLeft), (">", PtrRight), ("+", Incr), ("-", Decr), (",", Input),
+                                    (".", Output), ("[", JumpFwd), ("]", JumpBwd)]
+        where tryParse [] = []
+              tryParse ((attempt, result):xs) =
+                      if (take (length attempt) value) == attempt
+                         then [(result, drop (length attempt) value)]
+                         else tryParse xs
+
 data BFState = BFState [Int] [Int] | Fail deriving Show
+
+bfFromString :: String -> [BFInstr]
+bfFromString = map (\c -> (read [c])::BFInstr)
 
 interpret :: ListZipper.Zipper BFInstr -> ListZipper.Zipper Int -> [Int] -> [Int] -> BFState
 interpret instr dat inp outp
