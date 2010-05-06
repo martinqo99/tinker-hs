@@ -1,0 +1,13 @@
+Name:		suffixarray
+Version:	0.0.1
+Author:		Daniël de Kok <me@danieldk.eu>
+Maintainer:	Daniël de Kok <me@danieldk.eu>
+Category:	Data, Data Structures
+Synopsis:	Suffix Arrays
+Cabal-Version:	>= 1.2
+Build-Type:	Simple
+
+Library
+  Exposed-Modules:	Data.SuffixArray
+  Build-Depends:	base >= 3.0.3.1, vector >= 0.5
+  Ghc-Options:		-O2
