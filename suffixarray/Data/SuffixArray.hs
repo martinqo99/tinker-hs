@@ -1,7 +1,7 @@
 -- |
 -- Module      : Data.SuffixArray
 -- Copyright   : (c) 2010 Daniël de Kok
--- License     : Apache 2
+-- License     : BSD3
 --
 -- Maintainer  : Daniël de Kok <me@danieldk.eu>
 -- Stability   : experimental

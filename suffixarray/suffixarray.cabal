@@ -1,5 +1,6 @@
 Name:		suffixarray
 Version:	0.0.1
+License:	BSD3
 Author:		Daniël de Kok <me@danieldk.eu>
 Maintainer:	Daniël de Kok <me@danieldk.eu>
 Category:	Data, Data Structures
