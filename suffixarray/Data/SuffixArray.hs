@@ -12,6 +12,7 @@
 module Data.SuffixArray (SuffixArray(..),
                          fromList,
                          suffixArray,
+                         suffixArrayBy,
                          toList) where
 
 import qualified Data.Vector as V
@@ -28,13 +29,18 @@ fromList :: Ord a => [a] -> SuffixArray a
 fromList = suffixArray . V.fromList
 
 suffixArray :: Ord a => V.Vector a -> SuffixArray a
-suffixArray d = SuffixArray d (V.fromList srtIndex)
+suffixArray = suffixArrayBy compare
+
+suffixArrayBy :: Ord a => (V.Vector a -> V.Vector a -> Ordering) ->
+                 V.Vector a -> SuffixArray a
+suffixArrayBy cmp d = SuffixArray d (V.fromList srtIndex)
     where uppBound = V.length d - 1
           usrtIndex = [0..uppBound]
-          srtIndex = sortBy (saCompare d) usrtIndex
+          srtIndex = sortBy (saCompare cmp d) usrtIndex
 
-saCompare :: Ord a => V.Vector a -> Int -> Int -> Ordering
-saCompare d a b = compare (V.drop a d) (V.drop b d)
+saCompare :: Ord a => (V.Vector a -> V.Vector a -> Ordering) ->
+             V.Vector a -> Int -> Int -> Ordering
+saCompare cmp d a b = cmp (V.drop a d) (V.drop b d)
 
 toList :: SuffixArray a -> [[a]]
 toList (SuffixArray d i) = V.foldr vecAt [] i
