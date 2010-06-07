@@ -1,0 +1,4 @@
+Todo:
+
+- Unit tests (!)
+- Consider a toList that accepts a comparison function.
