@@ -1,0 +1,18 @@
+Name:		brainfuck
+Version:	0.0.1
+License:	BSD3
+License-file:	LICENSE
+Copyright:	Copyright 2010 Daniël de Kok and Harm Brouwer
+Author:		Daniël de Kok <me@danieldk.eu>
+Maintainer:	Daniël de Kok <me@danieldk.eu>
+Homepage:	http://github.com/danieldk/tinker-hs
+Category:	Language
+Synopsis:	Brainfuck interpreter
+Description:	Brainfuck interpreter
+Cabal-Version:	>= 1.2
+Build-Type:	Simple
+
+Library
+  Exposed-Modules:	Language.Brainfuck
+  Build-Depends:	base >= 4.2.0.0, ListZipper >= 1.1.1.0
+  Ghc-Options:		-O2
