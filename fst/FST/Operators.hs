@@ -1,4 +1,4 @@
-module FST.Operators ((<$>), (<->>)) where
+module FST.Operators ((<$>), (<->>), (<=>>)) where
 
 import FST.TransducerInterface
 
@@ -16,3 +16,10 @@ import FST.TransducerInterface
                                |> (upper <*> lower))
                    |> idR (complement ((<$>) (upper <-> eps)))
 
+-- |
+-- Restriction: recognize a string only if every instance of 'a' is
+-- preceded by 'l' and succeeded by 'r'.
+(<=>>) :: (Eq a) => Reg a -> (Reg a, Reg a) -> Reg a
+a <=>> (l, r) = complement
+                ((complement ((star allS) |> l) |> a |> (star allS)) <|>
+                 ((star allS) |> a |> complement (r |> star allS)))
