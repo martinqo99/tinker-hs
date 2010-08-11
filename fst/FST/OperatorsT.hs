@@ -1,6 +1,7 @@
-module FST.Operators ((<$>), (<->>), (<=>>)) where
+module FST.OperatorsT ((<$>), (<->>), (<=>>)) where
 
 import FST.TransducerInterface
+import FST.Operators
 
 -- |
 -- Replacement: build a transducer that replaces 'upper' by 'lower'.
