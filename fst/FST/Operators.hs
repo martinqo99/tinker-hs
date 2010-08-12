@@ -12,9 +12,9 @@ import FST.TransducerInterface
 -- Restriction: recognize a string only if every instance of 'a' is
 -- preceded by 'l' and succeeded by 'r'.
 (<=>>) :: (Eq a) => Reg a -> (Reg a, Reg a) -> Reg a
-a <=>> (l, r) = complement
-                ((complement (anyS |> l) |> a |> anyS) <|>
-                 (anyS |> a |> complement (r |> anyS)))
+a <=>> (l, r) = complement $
+                (complement (anyS |> l) |> a |> anyS) <|>
+                (anyS |> a |> complement (r |> anyS))
 
 anyS :: Eq a => Reg a
 anyS = star allS

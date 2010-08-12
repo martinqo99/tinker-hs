@@ -13,12 +13,11 @@ class Marker t where
 -- Implementation of markers for 'Char': '<' followed by 'n' percent
 -- signs.
 instance Marker Char where
-    giveMarker n = s '<' |> foldl (|>) eps (take n (repeat (s '%')))
+    giveMarker n = s '<' |> foldl (|>) eps (take n $ repeat $ s '%')
 
 -- |
 -- Replacement: build a transducer that replaces 'upper' by 'lower'.
 (<->>) :: Eq a => Reg a -> Reg a -> RReg a
-(<->>) upper lower = star (idR (complement ((<$>) (upper <-> eps)))
+(<->>) upper lower = star (idR (complement $ (<$>) $ upper <-> eps)
                                |> (upper <*> lower))
-                   |> idR (complement ((<$>) (upper <-> eps)))
-
+                   |> idR (complement $ (<$>) $ upper <-> eps)
