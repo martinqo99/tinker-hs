@@ -3,7 +3,7 @@ import Data.Maybe (fromJust)
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Internal (c2w)
 import Data.ByteString.Lex.Lazy.Double (readDouble)
-import System (getArgs)
+import System.Environment (getArgs)
 import System.Console.GetOpt
 
 scoreFromLine :: L.ByteString -> Double
