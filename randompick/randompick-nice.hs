@@ -19,17 +19,28 @@ lines ps
                     Just n  -> L.take n ps : lines (L.drop (n+1) ps)
     where search = L.elemIndex $ c2w '\n'
 
-takeSet :: Ord a => Int -> [a] -> Set.Set a
-takeSet n l = takeSet_ n l Set.empty
-    where takeSet_ n (x:xs) acc
-            | Set.size acc == n = acc
-            | otherwise = takeSet_ n xs (Set.insert x acc)
+filterAccumL :: Ord x => (acc -> x -> (acc, Bool))
+             -> acc
+             -> [x]
+             -> (acc, [x])
+filterAccumL _ a []     = (a, [])
+filterAccumL f a (x:xs) = (a'', [x|c] ++ ys)
+    where (a', c)   = f a x
+          (a'', ys) = filterAccumL f a' xs
 
-selectLines :: Ord a => Set.Set a -> [(a,b)] -> [b]
+
+fnub :: Ord a => [a] -> [a]
+fnub = snd . filterAccumL inSet Set.empty
+    where inSet acc x
+              | Set.member x acc = (acc, False)
+              | otherwise = (Set.insert x acc, True)
+
+selectLines :: Eq a => [a] -> [(a,b)] -> [b]
+selectLines [] _ = []
 selectLines _ [] = []
-selectLines sLines ((line,v):ys)
-    | Set.member line sLines = v : selectLines sLines ys
-    | otherwise = selectLines sLines ys
+selectLines xl@(c:xs) ((c',v):ys)
+    | c == c' = v : selectLines xs ys
+    | otherwise = selectLines xl ys
 
 usage = putStrLn "Usage: shuffle N file"
 
@@ -51,7 +62,7 @@ main = do
   let nLines = length fLines
   linesCheck nLines reqNLines
   g <- getStdGen
-  let lineNums = takeSet reqNLines $ randomRs (1, nLines) g
+  let lineNums = sort . take reqNLines . fnub $ randomRs (1, nLines) g
   h <- IO.openFile file IO.ReadMode
   fLines <- liftM lines $ L.hGetContents h
   let sLines = selectLines lineNums . zip [1..nLines] $ fLines
