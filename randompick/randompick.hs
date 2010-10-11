@@ -2,7 +2,6 @@ import Prelude hiding (lines)
 
 import qualified Data.ByteString.Lazy as L
 import Data.ByteString.Internal (c2w)
-import Data.List (sort)
 import qualified Data.Set as Set
 import Monad (liftM)
 import System.Environment (getArgs)
