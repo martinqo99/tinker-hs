@@ -49,7 +49,7 @@ processLines = do
   if eof
      then return()
      else do
-       B.getLine >>= putStrLn . BU.toString . scoreLine
+       B.putStrLn . scoreLine =<< B.getLine
        processLines
 
 main = do
