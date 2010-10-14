@@ -2,12 +2,11 @@ module Main where
 
 import Prelude hiding (lines)
 import Data.Maybe (fromJust)
-import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString as B
 import Data.ByteString.Internal (c2w)
-import Data.ByteString.Lex.Lazy.Double (readDouble)
-import qualified Data.ByteString.Lazy.UTF8 as LU
-import System.Environment (getArgs)
-import System.Console.GetOpt
+import Data.ByteString.Lex.Double (readDouble)
+import qualified Data.ByteString.UTF8 as BU
+import System.IO (isEOF)
 
 countsToScore :: (Double, Double, Double) -> Double
 countsToScore (ovl, cor, sys) =
@@ -18,33 +17,40 @@ countsToScore (ovl, cor, sys) =
     where n = max cor sys
           pen = n - ovl
 
-splitLine :: L.ByteString -> [L.ByteString]
-splitLine l = L.split (c2w '#') l
+splitLine :: B.ByteString -> [B.ByteString]
+splitLine l = B.split (c2w '#') l
 
-getCounts :: L.ByteString -> (Double, Double, Double)
-getCounts =  toTuple . bs2double . L.split (c2w '|')
+getCounts :: B.ByteString -> (Double, Double, Double)
+getCounts =  toTuple . bs2double . B.split (c2w '|')
     where bs2double = map (fst . fromJust . readDouble)
           toTuple [ovl, cor, sys] = (ovl, cor, sys)
 
-scoreLine :: L.ByteString -> L.ByteString
-scoreLine line = L.append  key . L.append sep . L.append n . L.append sep .
-                 L.append score $ L.append sep features
+scoreLine :: B.ByteString -> B.ByteString
+scoreLine line = B.append  key . B.append sep . B.append n . B.append sep .
+                 B.append score $ B.append sep features
     where lineParts = splitLine line
-          score = LU.fromString . show . countsToScore . getCounts $ lineParts !! 2
+          score = BU.fromString . show . countsToScore . getCounts $ lineParts !! 2
           key = lineParts !! 0
           n = lineParts !! 1
           features = lineParts !! 3
-          sep = LU.fromString "#"
+          sep = BU.fromString "#"
 
-lines :: L.ByteString -> [L.ByteString]
+lines :: B.ByteString -> [B.ByteString]
 lines ps
-    | L.null ps = []
+    | B.null ps = []
     | otherwise = case search ps of
                     Nothing -> [ps]
-                    Just n  -> L.take n ps : lines (L.drop (n+1) ps)
-    where search = L.elemIndex $ c2w '\n'
+                    Just n  -> B.take n ps : lines (B.drop (n+1) ps)
+    where search = B.elemIndex $ c2w '\n'
+
+processLines :: IO ()
+processLines = do
+  eof <- isEOF
+  if eof
+     then return()
+     else do
+       B.getLine >>= putStrLn . BU.toString . scoreLine
+       processLines
 
 main = do
-  lines <- fmap lines L.getContents
-  let scoredLines = map scoreLine lines
-  mapM (putStrLn . LU.toString) scoredLines
+  processLines
