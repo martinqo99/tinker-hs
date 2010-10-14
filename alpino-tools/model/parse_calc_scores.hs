@@ -26,7 +26,8 @@ getCounts =  toTuple . bs2double . B.split (c2w '|')
           toTuple [ovl, cor, sys] = (ovl, cor, sys)
 
 scoreLine :: B.ByteString -> B.ByteString
-scoreLine line = B.append  key . B.append sep . B.append n . B.append sep .
+scoreLine line = B.append parseMarker. B.append sep . B.append key .
+                 B.append sep . B.append n . B.append sep .
                  B.append score $ B.append sep features
     where lineParts = splitLine line
           score = BU.fromString . show . countsToScore . getCounts $ lineParts !! 2
@@ -34,6 +35,7 @@ scoreLine line = B.append  key . B.append sep . B.append n . B.append sep .
           n = lineParts !! 1
           features = lineParts !! 3
           sep = BU.fromString "#"
+          parseMarker = BU.fromString "P"
 
 lines :: B.ByteString -> [B.ByteString]
 lines ps
