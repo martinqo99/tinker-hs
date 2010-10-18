@@ -32,7 +32,7 @@ bsToTrainingInstance l =
           key = lineParts !! 1
           n = lineParts !! 2
           score = fst . fromJust . readDouble $ lineParts !! 3
-          features = lineParts !! 4
+          features = lineParts !! 3
 
 
 instanceFieldSep = c2w '#'
@@ -57,22 +57,19 @@ instanceParser step = return step
 
 groupInstance :: (Monad m) =>
                    E.Enumeratee TrainingInstance [TrainingInstance] m b
-groupInstance = loop [] (ParsingInstance, BU.fromString "")
-    where loop acc cur@(curType, curKey) (E.Continue k) = do
-            e <- E.head
-            case e of
-              Nothing -> return $ E.Continue k
-              Just i ->
-                  if instanceType i == curType && key i == curKey then do
-                      loop (i:acc) cur (E.Continue k)
-                  else do
-                    case acc of
-                      [] -> loop (i:acc) (instanceType i, key i) (E.Continue k)
-                      otherwise -> do
-                          let newAcc = [i]
-                          newStep <- MT.lift $ E.runIteratee $ k $ E.Chunks [acc]
-                          loop newAcc (instanceType i, key i) newStep
-          loop _ _ step = return step
+groupInstance = loop [] (ParsingInstance, BU.fromString "") where
+    loop acc cur = E.checkDone $ E.continue . step acc cur
+    step []  cur k E.EOF = E.yield (E.Continue k) E.EOF
+    step acc cur k E.EOF = do
+      newStep <- MT.lift $ E.runIteratee $ k $ E.Chunks [acc]
+      loop [] cur newStep
+    step acc cur k (E.Chunks []) = loop acc cur (E.Continue k)
+    step acc cur@(curType, curKey) k (E.Chunks (x:xs)) =
+        if instanceType x == curType && key x == curKey then
+            step (x:acc) cur k (E.Chunks xs)
+        else do
+          newStep <- MT.lift $ E.runIteratee $ k $ E.Chunks [acc]
+          loop [x] (instanceType x, key x) newStep
 
 lineEnum :: MonadIO m => E.Enumerator B.ByteString m b
 lineEnum = E.Iteratee . loop
