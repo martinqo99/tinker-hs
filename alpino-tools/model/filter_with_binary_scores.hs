@@ -6,7 +6,7 @@ import Data.ByteString.Internal (c2w)
 import Data.ByteString.Lex.Double (readDouble)
 import qualified Data.ByteString.UTF8 as BU
 import qualified Data.Enumerator as E
-import Data.Enumerator (($$))
+import Data.Enumerator hiding (isEOF, map)
 import Data.Enumerator.IO
 import Data.List (groupBy)
 import Data.Maybe (fromJust)
@@ -62,49 +62,34 @@ typeToBS instanceType
     | instanceType == ParsingInstance = parseMarker
     | instanceType == GenerationInstance = generationMarker
 
-
 instanceParser :: (Monad m) =>
-                  E.Enumeratee BU.ByteString TrainingInstance m b
-instanceParser (E.Continue k) = do
-  e <- E.head
-  case e of
-    Nothing -> return $ E.Continue k
-    Just y -> do
-           newStep <- MT.lift $ E.runIteratee $ k $ E.Chunks [bsToTrainingInstance y]
-           instanceParser newStep
-instanceParser step = return step
+                  Enumeratee BU.ByteString TrainingInstance m b
+instanceParser = E.map bsToTrainingInstance
 
 instanceGenerator :: (Monad m) =>
-                     E.Enumeratee TrainingInstance B.ByteString m b
-instanceGenerator (E.Continue k) = do
-  e <- E.head
-  case e of
-    Nothing -> return $ E.Continue k
-    Just y -> do
-           newStep <- MT.lift $ E.runIteratee $ k $ E.Chunks [trainingInstanceToBs y]      
-           instanceGenerator newStep
-instanceGenerator step = return step
+                     Enumeratee TrainingInstance B.ByteString m b
+instanceGenerator = E.map trainingInstanceToBs
 
 groupInstances = groupBy keyEq
     where keyEq i1 i2 = instanceType i1 == instanceType i2 &&
                         key i1 == key i2
 
-lineEnum :: MonadIO m => E.Enumerator B.ByteString m b
-lineEnum = E.Iteratee . loop
-    where loop (E.Continue k) = do
+lineEnum :: MonadIO m => Enumerator B.ByteString m b
+lineEnum = Iteratee . loop
+    where loop (Continue k) = do
             eof <- liftIO isEOF
             case eof of
-              True -> return $ E.Continue k
+              True -> return $ Continue k
               False -> do
                        line <- liftIO B.getLine
-                       E.runIteratee (k (E.Chunks [line])) >>= loop
+                       runIteratee (k (Chunks [line])) >>= loop
           loop step = return step
 
-printByteString :: MonadIO m => E.Iteratee B.ByteString m ()
-printByteString = E.continue step
-    where step (E.Chunks []) = E.continue step
-          step (E.Chunks xs) = liftIO (mapM_ B.putStrLn xs) >> E.continue step
-          step E.EOF = E.yield () E.EOF
+printByteString :: MonadIO m => Iteratee B.ByteString m ()
+printByteString = continue step
+    where step (Chunks []) = continue step
+          step (Chunks xs) = liftIO (mapM_ B.putStrLn xs) >> continue step
+          step EOF = yield () EOF
 
 rescore :: [TrainingInstance] -> [TrainingInstance]
 rescore ctx = map (rescoreEvt maxScore) ctx
@@ -114,7 +99,7 @@ rescore ctx = map (rescoreEvt maxScore) ctx
             | otherwise = evt { score = 0.0 }
 
 main = do
-  instances <- E.run_ $ lineEnum $$ E.joinI $ instanceParser $$ E.consume
+  instances <- run_ $ lineEnum $$ joinI $ instanceParser $$ consume
   let rescoredInstances = concat . (map rescore) . groupInstances $ instances
-  E.run_ $ E.enumList 1 rescoredInstances $$ E.joinI $ instanceGenerator $$
+  run_ $ enumList 1 rescoredInstances $$ joinI $ instanceGenerator $$
        printByteString
