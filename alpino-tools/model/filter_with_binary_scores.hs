@@ -1,6 +1,6 @@
 module Main where
 
-import Control.Concurrent.MonadIO
+import Control.Monad.IO.Class (MonadIO(..), liftIO)
 import qualified Data.ByteString as B
 import Data.ByteString.Internal (c2w)
 import Data.ByteString.Lex.Double (readDouble)
@@ -8,6 +8,7 @@ import qualified Data.ByteString.UTF8 as BU
 import qualified Data.Enumerator as E
 import Data.Enumerator (($$))
 import Data.Enumerator.IO
+import Data.List (groupBy)
 import Data.Maybe (fromJust)
 import qualified Control.Monad.Trans.Class as MT
 import System.IO (isEOF, stdin)
@@ -32,8 +33,19 @@ bsToTrainingInstance l =
           key = lineParts !! 1
           n = lineParts !! 2
           score = fst . fromJust . readDouble $ lineParts !! 3
-          features = lineParts !! 3
+          features = lineParts !! 4
 
+trainingInstanceToBs :: TrainingInstance -> B.ByteString
+trainingInstanceToBs i = B.append typeBS $ B.append fieldSep $
+                         B.append keyBS $ B.append fieldSep $
+                         B.append nBS $ B.append fieldSep $
+                         B.append scoreBS $ B.append fieldSep featuresBS
+    where typeBS = typeToBS $ instanceType i
+          keyBS = key i
+          nBS = n i
+          scoreBS = BU.fromString . show $ score i
+          featuresBS = features i
+          fieldSep = BU.fromString "#"
 
 instanceFieldSep = c2w '#'
 
@@ -41,8 +53,15 @@ bsToType :: B.ByteString -> TrainingInstanceType
 bsToType bs
     | bs == parseMarker = ParsingInstance
     | bs == generationMarker = GenerationInstance
-    where parseMarker = BU.fromString "P"
-          generationMarker = BU.fromString "G"
+
+parseMarker = BU.fromString "P"
+generationMarker = BU.fromString "G"
+
+typeToBS :: TrainingInstanceType -> B.ByteString
+typeToBS instanceType
+    | instanceType == ParsingInstance = parseMarker
+    | instanceType == GenerationInstance = generationMarker
+
 
 instanceParser :: (Monad m) =>
                   E.Enumeratee BU.ByteString TrainingInstance m b
@@ -55,21 +74,20 @@ instanceParser (E.Continue k) = do
            instanceParser newStep
 instanceParser step = return step
 
-groupInstance :: (Monad m) =>
-                   E.Enumeratee TrainingInstance [TrainingInstance] m b
-groupInstance = loop [] (ParsingInstance, BU.fromString "") where
-    loop acc cur = E.checkDone $ E.continue . step acc cur
-    step []  cur k E.EOF = E.yield (E.Continue k) E.EOF
-    step acc cur k E.EOF = do
-      newStep <- MT.lift $ E.runIteratee $ k $ E.Chunks [acc]
-      loop [] cur newStep
-    step acc cur k (E.Chunks []) = loop acc cur (E.Continue k)
-    step acc cur@(curType, curKey) k (E.Chunks (x:xs)) =
-        if instanceType x == curType && key x == curKey then
-            step (x:acc) cur k (E.Chunks xs)
-        else do
-          newStep <- MT.lift $ E.runIteratee $ k $ E.Chunks [acc]
-          loop [x] (instanceType x, key x) newStep
+instanceGenerator :: (Monad m) =>
+                     E.Enumeratee TrainingInstance B.ByteString m b
+instanceGenerator (E.Continue k) = do
+  e <- E.head
+  case e of
+    Nothing -> return $ E.Continue k
+    Just y -> do
+           newStep <- MT.lift $ E.runIteratee $ k $ E.Chunks [trainingInstanceToBs y]      
+           instanceGenerator newStep
+instanceGenerator step = return step
+
+groupInstances = groupBy keyEq
+    where keyEq i1 i2 = instanceType i1 == instanceType i2 &&
+                        key i1 == key i2
 
 lineEnum :: MonadIO m => E.Enumerator B.ByteString m b
 lineEnum = E.Iteratee . loop
@@ -82,4 +100,21 @@ lineEnum = E.Iteratee . loop
                        E.runIteratee (k (E.Chunks [line])) >>= loop
           loop step = return step
 
-main = E.run_ $ lineEnum $$ instanceParser $$ groupInstance $$ E.printChunks True
+printByteString :: MonadIO m => E.Iteratee B.ByteString m ()
+printByteString = E.continue step
+    where step (E.Chunks []) = E.continue step
+          step (E.Chunks xs) = liftIO (mapM_ B.putStrLn xs) >> E.continue step
+          step E.EOF = E.yield () E.EOF
+
+rescore :: [TrainingInstance] -> [TrainingInstance]
+rescore ctx = map (rescoreEvt maxScore) ctx
+    where maxScore = foldl (\acc e -> max acc $ score e) 0.0 ctx
+          rescoreEvt maxScore evt
+            | score evt == maxScore = evt { score = 1.0 }
+            | otherwise = evt { score = 0.0 }
+
+main = do
+  instances <- E.run_ $ lineEnum $$ E.joinI $ instanceParser $$ E.consume
+  let rescoredInstances = concat . (map rescore) . groupInstances $ instances
+  E.run_ $ E.enumList 1 rescoredInstances $$ E.joinI $ instanceGenerator $$
+       printByteString
