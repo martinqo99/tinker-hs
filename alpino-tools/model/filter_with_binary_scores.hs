@@ -85,6 +85,33 @@ lineEnum = Iteratee . loop
                        runIteratee (k (Chunks [line])) >>= loop
           loop step = return step
 
+groupByEnum :: (Monad m) =>
+                  Enumeratee TrainingInstance [TrainingInstance] m b
+groupByEnum = loop
+    where loop (Continue k) = do
+            h <- peek
+            case h of
+              Nothing -> return $ Continue k
+              Just h -> do
+                     xs <- E.span $ keyEq h
+                     newStep <- MT.lift $ runIteratee $ k $ Chunks [xs]
+                     loop newStep
+          loop step = return step
+          keyEq i1 i2 = instanceType i1 == instanceType i2 &&
+                              key i1 == key i2
+
+concatEnum :: (Monad m) =>
+              Enumeratee [a] a m b
+concatEnum = loop
+    where loop (Continue k) = do
+            h <- E.head
+            case h of
+              Nothing -> return $ Continue k
+              Just h -> do
+                     newStep <- MT.lift $ runIteratee $ k $ Chunks h
+                     loop newStep
+          loop step = return step
+
 printByteString :: MonadIO m => Iteratee B.ByteString m ()
 printByteString = continue step
     where step (Chunks []) = continue step
@@ -98,8 +125,12 @@ rescore ctx = map (rescoreEvt maxScore) ctx
             | score evt == maxScore = evt { score = 1.0 }
             | otherwise = evt { score = 0.0 }
 
+rescoreEnum = E.map rescore
+
 main = do
-  instances <- run_ $ lineEnum $$ joinI $ instanceParser $$ consume
-  let rescoredInstances = concat . (map rescore) . groupInstances $ instances
-  run_ $ enumList 1 rescoredInstances $$ joinI $ instanceGenerator $$
-       printByteString
+  run_ $ lineEnum $$ joinI $ instanceParser $$ joinI $ groupByEnum $$
+       joinI $ rescoreEnum $$ joinI $ concatEnum $$
+       joinI $ instanceGenerator $$ printByteString
+--  let rescoredInstances = concat . (map rescore) . groupInstances $ instances
+--  run_ $ enumList 1 rescoredInstances $$ joinI $ instanceGenerator $$
+--       printByteString
