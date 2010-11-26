@@ -66,6 +66,6 @@ main = do
   h <- IO.openFile file IO.ReadMode
   fLines <- liftM lines $ L.hGetContents h
   let sLines = selectLines lineNums . zip [1..nLines] $ fLines
-  mapM L.putStrLn sLines
-  return ()
+  mapM_ L.putStrLn sLines
+
   
