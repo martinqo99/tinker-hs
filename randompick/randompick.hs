@@ -50,5 +50,6 @@ main = do
   linesCheck nLines reqNLines
   g <- getStdGen
   let lineNums = takeSet reqNLines $ randomRs (1, nLines) g
-  run_ (enumFileLines 1 file $$ joinI $ filterLines lineNums $$ joinI $ EL.map snd $$ EL.mapM_ (putStrLn . T.unpack))
+  run_ (enumFileLines 1 file $$ joinI $ filterLines lineNums $$
+    joinI $ EL.map snd $$ EL.mapM_ (putStrLn . T.unpack))
 
