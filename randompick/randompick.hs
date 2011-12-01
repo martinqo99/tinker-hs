@@ -24,7 +24,7 @@ usage = do
 
 parse :: [a] -> IO (a, a)
 parse [n, file] = return (n, file)
-parse _ = usage >> exitFailure
+parse _         = usage >> exitFailure
 
 linesError :: IO ()
 linesError = putStrLn "Number of requested lines larger than file lines!"
@@ -32,18 +32,19 @@ linesError = putStrLn "Number of requested lines larger than file lines!"
 linesCheck :: Ord a => a -> a -> IO ()
 linesCheck nLines reqNLines
     | reqNLines > nLines = linesError >> exitFailure
-    | otherwise = return ()
+    | otherwise          = return ()
 
 countChunks :: (Num b, Enum b) => Iteratee a IO b 
 countChunks = EL.fold (\acc _ -> succ acc) 0
 
 enumFileLines :: Enum a => a -> FilePath -> Enumerator (a, T.Text) IO b
 enumFileLines n file =
-  ET.enumFile file $= EL.mapAccum (\acc line -> (succ acc, (acc, line))) n
+  ET.enumFile file $= EL.mapAccum addLineNumber n
+  where
+    addLineNumber acc line = (succ acc, (acc, line))
 
 filterLines :: (Monad m, Ord o) => Set.Set o -> Enumeratee (o, a) (o, a) m b
-filterLines lineNums =
-  EL.filter (\(line, _) -> Set.member line lineNums) 
+filterLines lineNums = EL.filter (\(line, _) -> Set.member line lineNums)
 
 printChunks :: Iteratee T.Text IO ()
 printChunks = EL.mapM_ (putStrLn . T.unpack)
