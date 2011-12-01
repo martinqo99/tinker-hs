@@ -1,6 +1,7 @@
 import Prelude hiding (lines)
 
-import Data.Enumerator (Enumeratee, Enumerator, ($$), ($=), joinI, run_)
+import Data.Enumerator (Enumeratee, Enumerator, Iteratee,
+  ($$), ($=), joinI, run_)
 import qualified Data.Enumerator.Text as ET
 import qualified Data.Enumerator.List as EL
 import qualified Data.Set as Set
@@ -33,6 +34,9 @@ linesCheck nLines reqNLines
     | reqNLines > nLines = linesError >> exitFailure
     | otherwise = return ()
 
+countChunks :: (Num b, Enum b) => Iteratee a IO b 
+countChunks = EL.fold (\acc _ -> succ acc) 0
+
 enumFileLines :: Enum a => a -> FilePath -> Enumerator (a, T.Text) IO b
 enumFileLines n file =
   ET.enumFile file $= EL.mapAccum (\acc line -> (succ acc, (acc, line))) n
@@ -41,15 +45,18 @@ filterLines :: (Monad m, Ord o) => Set.Set o -> Enumeratee (o, a) (o, a) m b
 filterLines lineNums =
   EL.filter (\(line, _) -> Set.member line lineNums) 
 
+printChunks :: Iteratee T.Text IO ()
+printChunks = EL.mapM_ (putStrLn . T.unpack)
+
 main :: IO ()
 main = do
   args <- getArgs
   (n, file) <- parse args
   let reqNLines = (read n)::Int
-  nLines <- run_ (ET.enumFile file $$ EL.fold (\acc _ -> succ acc) 0)
+  nLines <- run_ (ET.enumFile file $$ countChunks)
   linesCheck nLines reqNLines
   g <- getStdGen
   let lineNums = takeSet reqNLines $ randomRs (1, nLines) g
   run_ (enumFileLines 1 file $$ joinI $ filterLines lineNums $$
-    joinI $ EL.map snd $$ EL.mapM_ (putStrLn . T.unpack))
+    joinI $ EL.map snd $$ printChunks)
 
