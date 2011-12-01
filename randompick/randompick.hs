@@ -5,7 +5,7 @@ import qualified Data.Enumerator.Text as ET
 import qualified Data.Enumerator.List as EL
 import qualified Data.Set as Set
 import qualified Data.Text as T
-import System.Environment (getArgs)
+import System.Environment (getArgs, getProgName)
 import System.Exit (exitFailure)
 import System.Random
 
@@ -17,7 +17,9 @@ takeSet n l = takeSet_ l Set.empty
           takeSet_ []     acc  = acc -- XXX - do we want this?
 
 usage :: IO ()
-usage = putStrLn "Usage: shuffle N file"
+usage = do
+  progName <- getProgName
+  putStrLn $ "Usage: " ++ progName ++ " N file"
 
 parse :: [a] -> IO (a, a)
 parse [n, file] = return (n, file)
