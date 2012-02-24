@@ -77,10 +77,10 @@ toDouble = CL.mapM $ \v ->
     Left err     -> resourceThrow $ DoubleConversionException err
     Right (d, _) -> return $ d
 
-randApprox :: (Num a, Ord a, MonadRandom r, VG.Vector v a) => a -> v a ->
-  v a -> r [Bool]
-randApprox tOrig v1 v2 =
-  replicateM 10000 $ do
+randApprox :: (Num a, Ord a, MonadRandom r, VG.Vector v a) => Int -> a ->
+  v a -> v a -> r [Bool]
+randApprox n tOrig v1 v2 =
+  replicateM n $ do
     (p1, p2) <- permuteVectors v1 v2
     return $ (t p1 p2) > tOrig
 
@@ -92,7 +92,7 @@ main = do
   let tOrig = t v1 v2
   putStrLn $ printf "t_orig: %f" tOrig
   r <- length `fmap` filter (== True)  `fmap`
-    evalRandIO (randApprox tOrig v1 v2)
+    evalRandIO (randApprox 10000 tOrig v1 v2)
   let p = ((1.0) + fromIntegral r) / 10001.0 :: Double
   putStrLn $ printf "r: %d\np: %f" r p
 
