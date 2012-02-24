@@ -1,8 +1,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 
 import           Control.Exception.Base (Exception)
-import           Control.Monad (forM_, liftM)
-import           Control.Monad.Random (Rand, runRand)
+import           Control.Monad (forM_, liftM, replicateM)
+import           Control.Monad.Random (evalRandIO)
 import           Control.Monad.Random.Class (MonadRandom(..))
 import           Control.Monad.ST (runST)
 import           Control.Monad.Trans.Resource (ResourceThrow (..))
@@ -20,7 +20,6 @@ import qualified Data.Vector.Generic as VG
 import qualified Data.Vector.Generic.Mutable as VM
 import           System.Environment (getArgs)
 import           System.Exit (exitFailure)
-import           System.Random (RandomGen, newStdGen)
 import           Text.Printf (printf)
 
 data ReadException =
@@ -33,9 +32,9 @@ instance Exception ReadException
 subVector :: (VG.Vector v n, Num n) => v n -> v n -> v n
 subVector = VG.zipWith (-)
 
-permuteVectors' :: (RandomGen g, VG.Vector v a) => v a -> v a ->
-  Rand g (v a, v a)
-permuteVectors' vec1 vec2 = do
+permuteVectors :: (MonadRandom r, VG.Vector v a) => v a -> v a ->
+  r (v a, v a)
+permuteVectors vec1 vec2 = do
   let vLen = VG.length vec1
   rands <- getRandoms
   return $ runST $ do
@@ -45,7 +44,7 @@ permuteVectors' vec1 vec2 = do
 
     -- Shuffle vectors.
     forM_ (zip [0..vLen - 1] rands) $ \(idx, coin) -> do
-      if coin == True then do
+      if coin then do
         VM.write nvec1 idx $ vec1 ! idx
         VM.write nvec2 idx $ vec2 ! idx
       else do
@@ -67,7 +66,7 @@ readFileCol fn col =
     CB.sourceFile fn $=
     CB.lines $=
     CT.decode CT.utf8 $=
-    CL.map (T.split (==' ')) $=
+    CL.map (T.split (== ' ')) $=
     CL.map (!! col) $=
     toDouble $$
     CL.consume )
@@ -78,14 +77,12 @@ toDouble = CL.mapM $ \v ->
     Left err     -> resourceThrow $ DoubleConversionException err
     Right (d, _) -> return $ d
 
-randApprox :: (Num a, Ord a, RandomGen g, VG.Vector v a) => g -> a -> v a ->
-  v a -> [Int]
-randApprox gen tOrig v1 v2 =
-  let ((p1, p2), newGen) = runRand (permuteVectors' v1 v2) gen in
-    if (t p1 p2) > tOrig then
-      1 : randApprox newGen tOrig v1 v2
-    else
-      0 : randApprox newGen tOrig v1 v2
+randApprox :: (Num a, Ord a, MonadRandom r, VG.Vector v a) => a -> v a ->
+  v a -> r [Bool]
+randApprox tOrig v1 v2 =
+  replicateM 10000 $ do
+    (p1, p2) <- permuteVectors v1 v2
+    return $ (t p1 p2) > tOrig
 
 main :: IO ()
 main = do
@@ -94,8 +91,8 @@ main = do
   v2 <- liftM V.fromList $ readFileCol (args !! 1) 0
   let tOrig = t v1 v2
   putStrLn $ printf "t_orig: %f" tOrig
-  mt <- newStdGen
-  let r = sum $ take 10000 $ randApprox mt tOrig v1 v2 :: Int
+  r <- length `fmap` filter (== True)  `fmap`
+    evalRandIO (randApprox tOrig v1 v2)
   let p = ((1.0) + fromIntegral r) / 10001.0 :: Double
   putStrLn $ printf "r: %d\np: %f" r p
 
