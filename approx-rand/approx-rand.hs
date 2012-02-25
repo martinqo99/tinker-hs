@@ -1,5 +1,15 @@
+-- |
+-- Copyright  : (c) 2012 Daniël de Kok
+-- License    : Apache 2
+--
+-- Maintainer : Daniël de Kok <me@danieldk.eu>
+-- Stability  : experimental
+--
+-- Approximate randomization test (Noreen, 1989)
+
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DoAndIfThenElse #-}
 
 import           Control.Exception.Base (Exception)
 import           Control.Monad (liftM, replicateM)
