@@ -1,10 +1,10 @@
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 import           Control.Exception.Base (Exception)
-import           Control.Monad (forM_, liftM, replicateM)
+import           Control.Monad (liftM, replicateM)
 import           Control.Monad.Random (evalRandIO)
 import           Control.Monad.Random.Class (MonadRandom(..))
-import           Control.Monad.ST (runST)
 import           Control.Monad.Trans.Resource (ResourceThrow (..))
 import           Data.Conduit (($$), ($=)) 
 import qualified Data.Conduit as C
@@ -15,11 +15,10 @@ import qualified Data.Text as T
 import qualified Data.Text.Read as TR
 import           Data.Typeable (Typeable)
 import qualified Data.Vector.Unboxed as V
-import           Data.Vector.Generic ((!))
 import qualified Data.Vector.Generic as VG
-import qualified Data.Vector.Generic.Mutable as VM
 import           System.Environment (getArgs)
 import           System.Exit (exitFailure)
+import           System.Random (Random)
 import           Text.Printf (printf)
 
 data ReadException =
@@ -32,29 +31,22 @@ instance Exception ReadException
 subVector :: (VG.Vector v n, Num n) => v n -> v n -> v n
 subVector = VG.zipWith (-)
 
-permuteVectors :: (MonadRandom r, VG.Vector v a) => v a -> v a ->
-  r (v a, v a)
+-- | Get a Vector with random values.
+randomVector :: (MonadRandom r, Random a, VG.Vector v a) => Int -> r (v a)
+randomVector len = do
+  VG.fromList `liftM` take len `liftM` getRandoms
+
+-- | Permute two vectors.
+permuteVectors :: (MonadRandom r, VG.Vector v a, VG.Vector v Bool) =>
+  v a -> v a -> r (v a, v a)
 permuteVectors vec1 vec2 = do
-  let vLen = VG.length vec1
-  rands <- getRandoms
-  return $ runST $ do
-    -- Initialize new vectors.
-    nvec1 <- VM.new vLen 
-    nvec2 <- VM.new vLen 
-
-    -- Shuffle vectors.
-    forM_ (zip [0..vLen - 1] rands) $ \(idx, coin) -> do
-      if coin then do
-        VM.write nvec1 idx $ vec1 ! idx
-        VM.write nvec2 idx $ vec2 ! idx
-      else do
-        VM.write nvec1 idx $ vec2 ! idx
-        VM.write nvec2 idx $ vec1 ! idx
-
-    -- Freeze and return the permuted vectors.
-    f1 <- VG.freeze nvec1
-    f2 <- VG.freeze nvec2
-    return (f1, f2)
+  randomVec <- randomVector (VG.length vec1)
+  let pv1 = VG.zipWith3 permute vec1 vec2 randomVec
+  let pv2 = VG.zipWith3 permute vec2 vec1 randomVec
+  return (pv1, pv2)
+  where
+    permute val1 val2 coin =
+      if coin then val1 else val2
 
 -- | Simple test statistic.
 t :: (VG.Vector v n, Num n) => v n -> v n -> n
@@ -77,7 +69,7 @@ toDouble = CL.mapM $ \v ->
     Left err     -> resourceThrow $ DoubleConversionException err
     Right (d, _) -> return $ d
 
-randApprox :: (Num a, Ord a, MonadRandom r, VG.Vector v a) => Int -> a ->
+randApprox :: (Num a, Ord a, MonadRandom r, VG.Vector v a, VG.Vector v Bool) => Int -> a ->
   v a -> v a -> r [Bool]
 randApprox n tOrig v1 v2 =
   replicateM n $ do
