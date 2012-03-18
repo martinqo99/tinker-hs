@@ -16,6 +16,7 @@ import Data.Conduit (($$), ($=), Resource, Sink, SinkStateResult(..), runResourc
 import qualified Data.Conduit.Binary as CB
 import qualified Data.Conduit.List as CL
 import Data.List (intercalate)
+import Data.List (unfoldr)
 import qualified Data.List.Zipper as LZ
 import qualified Data.Set.BKTree as BKT
 import qualified Data.Set.BKTree.Strict as BKS
@@ -52,11 +53,11 @@ confuse f sent = do
 -- zipper that does not point to a list element is not included.
 zippers :: [a] -> [LZ.Zipper a]
 zippers =
-  go . LZ.fromList
+  unfoldr go . LZ.fromList
   where
     go z
-      | LZ.endp z = []
-      | otherwise = z : go (LZ.right z)
+      | LZ.endp z = Nothing
+      | otherwise = Just (z, LZ.right z)
 
 -- |
 -- Read a list of words into a 'BKTree'.
